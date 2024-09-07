@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"time"
 
 	_ "github.com/lib/pq" // postgres driver
+	"golang.org/x/exp/rand"
 )
 
 type Storage interface {
@@ -13,14 +15,14 @@ type Storage interface {
 	DeleteAccount(int) error
 	UpdateAccount(*Account) error
 	GetAccountByIDs(int) (*Account, error)
-	GetAllAccounts() ([]Account, error)
+	GetAllAccounts() ([]*Account, error)
 }
 
 type DBConfig struct {
-	User string
+	User     string
 	Password string
-	DBName string
-	SSLMode string
+	DBName   string
+	SSLMode  string
 }
 
 type PostgresStore struct {
@@ -41,53 +43,90 @@ func NewPostgresStore(config DBConfig) (*PostgresStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
 	return &PostgresStore{db: db}, nil
 }
 
-
 func (postgresStore *PostgresStore) Init() error {
 	return postgresStore.CreateAccountTable()
 }
-func (postgresStore *PostgresStore)CreateAccountTable() error{
-	creationQuery := `
-	create table account if not exists (
-	id serial primary key,
-	first_name varchar(50),	
-	last_name varchar(50),
-	number serial,
-	balance serial,
-	created_at timestamp
-	)`
-	_, err := postgresStore.db.Exec(creationQuery)
-	return err
-}
 
+func (postgresStore *PostgresStore) CreateAccountTable() error {
+	creationQuery := `
+		CREATE TABLE IF NOT EXISTS account (
+			id serial PRIMARY KEY,
+			first_name varchar(50),	
+			last_name varchar(50),
+			number serial,
+			balance serial,
+			created_at timestamp
+		)`
+	_, err := postgresStore.db.Exec(creationQuery)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 func NewAccount(firstName string, lastName string) *Account {
 	return &Account{
+		ID:        rand.Intn(100000),
 		FirstName: firstName,
-		LastName: lastName,
+		LastName:  lastName,
+		Number:    int64(rand.Intn(100000000)),
+		CreatedAt: time.Now().UTC(),
 	}
 }
-func CreateAccount(*Account) error{
+
+func (postgresStore *PostgresStore) CreateAccount(account *Account) error {
+	query := `
+	INSERT INTO account
+	(first_name, last_name, number, balance, created_at)
+	VALUES ($1, $2, $3, $4, $5)`
+	resp, err := postgresStore.db.Exec(query,
+		account.FirstName,
+		account.LastName,
+		account.Number,
+		account.Balance,
+		account.CreatedAt)
+
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%+v\n", resp,
+	)
 	return nil
 }
 
-func DeleteAccount(int) error {
+func (postgresStore *PostgresStore) DeleteAccount(id int) error {
 	return nil
 }
-func UpdateAccount(*Account) error {
+
+func (postgresStore *PostgresStore) UpdateAccount(*Account) error {
 	return nil
 }
-func GetAccountByIDs(int) (*Account, error) {
+func (postgresStore *PostgresStore) GetAccountByIDs(int) (*Account, error) {
 	return nil, nil
 }
-func GetAllAccounts() ([]Account, error) {
-	return nil, nil
+func (postgresStore *PostgresStore) GetAllAccounts() ([]*Account, error) {
+	rows, err := postgresStore.db.Query("SELECT * FROM account")
+	if err != nil {
+		return nil, err
+	}
+
+	accounts := []*Account{}
+	for rows.Next() {
+		account := new(Account)
+		err := rows.Scan(
+			&account.ID, &account.FirstName, &account.LastName, &account.Number, &account.Balance, &account.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		accounts = append(accounts, account)
+	}
+	return accounts, nil
 }
-
-

@@ -2,27 +2,28 @@ package main
 
 import (
 	"log"
-
-	"github.com/joho/godotenv"
 )
 
-func main() { 
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
+func main() {
+	// Load environment variables
+	if err := loadEnv(); err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
 	}
-	config := DBConfig{
-        User:     "postgres",
-        Password: "test",
-        DBName:   "go-postgres",
-        SSLMode:  "disable",
-    }
 
-	
+	// Initialize database configuration
+	config := getDBConfig()
+
+	// Create and initialize Postgres store
 	store, err := NewPostgresStore(config)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to create Postgres store: %v", err)
 	}
+
+	if err := store.Init(); err != nil {
+		log.Fatalf("Failed to initialize store: %v", err)
+	}
+
+	// Start API server
 	server := NewAPIServer(":3000", store)
 	server.Run()
 }
