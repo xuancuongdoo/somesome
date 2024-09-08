@@ -76,16 +76,20 @@ func (apiServer *APIServer) handleGetAccountByID(response http.ResponseWriter, r
 	}
 	return fmt.Errorf("invalid method: %s", request.Method)
 }
-func (apiServer *APIServer) handleCreateAccount(response http.ResponseWriter, r *http.Request) error {
+func (apiServer *APIServer) handleCreateAccount(response http.ResponseWriter, request *http.Request) error {
 	createAccountRequest := new(CreateAccountRequest)
 
-	if errors := json.NewDecoder(r.Body).Decode(createAccountRequest); errors != nil {
+	if errors := json.NewDecoder(request.Body).Decode(createAccountRequest); errors != nil {
 		return errors
 	}
 	account := NewAccount(createAccountRequest.FirstName, createAccountRequest.LastName)
 	if errors := apiServer.store.CreateAccount(account); errors != nil {
 		return errors
 	}
+	
+	tokenString, err := createJWT(account)
+	if err != nil { return err }
+	fmt.Println("Token:", tokenString)
 	return WriteJSON(response, http.StatusOK, createAccountRequest)
 }
 
